@@ -3,3 +3,6 @@ data
 CityGML2OBJv2
 *.pyc 
 output/
+temp_models/
+uploads/
+*.DS_Store

@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 import os
 
 # Paths
-GML_FILE = "data/AI_27_D.gml"
+GML_FILE = "data/AT_30_A.gml"
 METADATA_FILE = "output/citymodel_metadata.json"
 OUTPUT_FILE = "output/citymodel_metadata.json"
 
