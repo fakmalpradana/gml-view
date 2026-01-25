@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CityGML Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: #1a1a2e;
+        }
+
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(26, 26, 46, 0.9);
+            color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            min-width: 250px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        #info h2 {
+            margin-bottom: 15px;
+            color: #64ffda;
+            font-size: 18px;
+        }
+
+        #info p {
+            margin: 8px 0;
+            color: #b0b0c0;
+        }
+
+        #info strong {
+            color: #fff;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #64ffda;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 4px solid rgba(100, 255, 218, 0.1);
+            border-top: 4px solid #64ffda;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .controls {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-item {
+            margin: 5px 0;
+            font-size: 12px;
+            color: #8080a0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <div>Loading CityGML Model...</div>
+    </div>
+
+    <div id="info" style="display: none;">
+        <h2>🏙️ CityGML Viewer</h2>
+        <p><strong>Objects:</strong> <span id="object-count">-</span></p>
+        <p><strong>Vertices:</strong> <span id="vertex-count">-</span></p>
+        <p><strong>Triangles:</strong> <span id="triangle-count">-</span></p>
+        <div class="controls">
+            <div class="control-item">🖱️ Left Click + Drag: Rotate</div>
+            <div class="control-item">🖱️ Right Click + Drag: Pan</div>
+            <div class="control-item">🖱️ Scroll: Zoom</div>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        scene.fog = new THREE.Fog(0x1a1a2e, 200, 1000);
+
+        // Camera - configured for Z-up, Y-forward coordinate system
+        const camera = new THREE.PerspectiveCamera(
+            60,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            2000
+        );
+        // Position camera: looking toward +Y (forward/north) with Z as up
+        camera.position.set(200, -200, 200);
+        camera.up.set(0, 0, 1); // Set Z as up vector
+
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.screenSpacePanning = true;
+        controls.minDistance = 10;
+        controls.maxDistance = 1000;
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        sunLight.position.set(100, 200, 100);
+        sunLight.castShadow = true;
+        sunLight.shadow.camera.left = -500;
+        sunLight.shadow.camera.right = 500;
+        sunLight.shadow.camera.top = 500;
+        sunLight.shadow.camera.bottom = -500;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        scene.add(sunLight);
+
+        const fillLight = new THREE.DirectionalLight(0x64ffda, 0.3);
+        fillLight.position.set(-100, 50, -100);
+        scene.add(fillLight);
+
+        // Ground plane (XY plane in Z-up system)
+        const groundGeometry = new THREE.PlaneGeometry(2000, 2000);
+        const groundMaterial = new THREE.MeshStandardMaterial({
+            color: 0x16213e,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        // No rotation needed - plane is already in XY, we just set the Z position
+        ground.position.z = -35; // Ground level below the model
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Grid (horizontal in XY plane)
+        const gridHelper = new THREE.GridHelper(1000, 50, 0x64ffda, 0x2a2a4e);
+        gridHelper.rotation.x = Math.PI / 2; // Rotate to XY plane
+        gridHelper.position.z = -34.9;
+        scene.add(gridHelper);
+
+        // Load model
+        const mtlLoader = new MTLLoader();
+        mtlLoader.load('./citymodel.mtl', (materials) => {
+            materials.preload();
+
+            const objLoader = new OBJLoader();
+            objLoader.setMaterials(materials);
+
+            objLoader.load(
+                './citymodel.obj',
+                (object) => {
+                    // Calculate statistics
+                    let vertexCount = 0;
+                    let triangleCount = 0;
+                    let objectCount = 0;
+
+                    object.traverse((child) => {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+
+                            // Add edges for better visualization
+                            const edges = new THREE.EdgesGeometry(child.geometry, 15);
+                            const lineMaterial = new THREE.LineBasicMaterial({
+                                color: 0x000000,
+                                opacity: 0.2,
+                                transparent: true
+                            });
+                            const edgeLines = new THREE.LineSegments(edges, lineMaterial);
+                            child.add(edgeLines);
+
+                            vertexCount += child.geometry.attributes.position.count;
+                            triangleCount += child.geometry.index ?
+                                child.geometry.index.count / 3 :
+                                child.geometry.attributes.position.count / 3;
+                            objectCount++;
+                        }
+                    });
+
+                    scene.add(object);
+
+                    // Update UI
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('info').style.display = 'block';
+                    document.getElementById('object-count').textContent = objectCount;
+                    document.getElementById('vertex-count').textContent = vertexCount.toLocaleString();
+                    document.getElementById('triangle-count').textContent = Math.floor(triangleCount).toLocaleString();
+
+                    // Center camera on model (Z-up system)
+                    const box = new THREE.Box3().setFromObject(object);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+
+                    controls.target.copy(center);
+                    // Position camera: X offset (side), -Y offset (behind/south), +Z offset (above)
+                    camera.position.set(
+                        center.x + maxDim,
+                        center.y - maxDim,
+                        center.z + maxDim * 0.7
+                    );
+                    controls.update();
+
+                    console.log('Model loaded successfully!');
+                    console.log('Center:', center);
+                    console.log('Size:', size);
+                },
+                (xhr) => {
+                    const percent = (xhr.loaded / xhr.total * 100).toFixed(0);
+                    document.querySelector('#loading div:last-child').textContent =
+                        `Loading CityGML Model... ${percent}%`;
+                },
+                (error) => {
+                    console.error('Error loading model:', error);
+                    document.getElementById('loading').innerHTML =
+                        '<div>Error loading model. Check console for details.</div>';
+                }
+            );
+        }, undefined, (error) => {
+            console.error('Error loading materials:', error);
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>
