@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 CityGML Conversion Server
-Handles file uploads, automatic conversion to OBJ, and temporary file management
+Handles file uploads, automatic conversion to GLB, and temporary file management
 """
 
 from flask import Flask, request, jsonify, send_from_directory
@@ -90,8 +90,7 @@ def upload_gml():
             "filename": file.filename,
             "message": "Conversion successful",
             "files": {
-                "obj": f"/models/{session_id}/model.obj",
-                "mtl": f"/models/{session_id}/model.mtl",
+                "glb": f"/models/{session_id}/model.glb",
                 "metadata": f"/models/{session_id}/model_metadata.json"
             }
         }), 200
@@ -102,25 +101,27 @@ def upload_gml():
 
 def run_conversion(gml_path, output_dir, session_id):
     """
-    Run the CityGML to OBJ conversion script.
+    Run the CityGML to GLB conversion script.
     Returns (success: bool, message: str)
     """
     try:
         # Check if conversion script exists
-        convert_script = Path("src/convert.py")
+        convert_script = Path("gml2glb.py")
         if not convert_script.exists():
-            return False, "Conversion script not found"
+            return False, "Conversion script (gml2glb.py) not found"
         
-        # Output file path (not directory)
-        obj_output = output_dir / "citymodel.obj"
+        # Output file path
+        glb_output = output_dir / "model.glb"
         
-        # Run conversion with correct arguments
+        # Run conversion
         cmd = [
             sys.executable,
             str(convert_script),
-            "-i", str(gml_path),
-            "-o", str(obj_output)  # Pass file path, not directory
+            str(gml_path),
+            str(glb_output)
         ]
+        
+        print(f"Running: {' '.join(cmd)}")
         
         result = subprocess.run(
             cmd,
@@ -134,20 +135,22 @@ def run_conversion(gml_path, output_dir, session_id):
             print(f"Conversion failed: {error_msg}")
             return False, f"Conversion failed: {error_msg}"
         
+        # Print conversion output
+        if result.stdout:
+            print(f"Conversion output:\\n{result.stdout}")
+        
         # Verify output files exist
-        obj_file = output_dir / "citymodel.obj"
-        mtl_file = output_dir / "citymodel.mtl"
-        metadata_file = output_dir / "citymodel_metadata.json"
+        glb_file = output_dir / "model.glb"
+        metadata_file = output_dir / "model_metadata.json"
         
-        if not obj_file.exists():
-            return False, "OBJ file was not generated"
+        if not glb_file.exists():
+            return False, "GLB file was not generated"
         
-        # Rename to generic names for serving
-        obj_file.rename(output_dir / "model.obj")
-        if mtl_file.exists():
-            mtl_file.rename(output_dir / "model.mtl")
-        if metadata_file.exists():
-            metadata_file.rename(output_dir / "model_metadata.json")
+        if not metadata_file.exists():
+            return False, "Metadata file was not generated"
+        
+        print(f"✅ GLB conversion successful: {glb_file.stat().st_size} bytes")
+        print(f"✅ Metadata generated: {metadata_file.stat().st_size} bytes")
         
         return True, "Success"
         

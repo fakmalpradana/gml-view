@@ -593,8 +593,7 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-        import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
         // Scene setup
         const scene = new THREE.Scene();
@@ -668,12 +667,12 @@
 
         // State management
         let metadata = null;
-        let allObjects = [];
-        let objectMeshes = {};
+        let allObjects = [];  // For UI list (array of objects)
+        let objectMeshMap = {};  // For mesh tracking by ID: { objectId: [mesh1, mesh2, ...] }
         let selectedMesh = null;
         let hoveredMesh = null;
         let modelGroup = null;
-        let originalMaterials = new Map();
+        const originalMaterials = new Map();
 
         // Raycaster for 3D picking and hovering
         const raycaster = new THREE.Raycaster();
@@ -833,7 +832,7 @@
             if (!selectedObjectId) return;
 
             // Find the mesh by checking our stored meshes
-            const meshes = objectMeshes[selectedObjectId];
+            const meshes = objectMeshMap[selectedObjectId];
             if (!meshes || meshes.length === 0) {
                 console.warn('Mesh not found for:', selectedObjectId);
                 return;
@@ -901,9 +900,25 @@
             });
         });
 
-        // Hover effect handler
+        // Clear hover effect
+        function clearHover() {
+            if (hoveredMesh && hoveredMesh !== selectedMesh) {
+                const original = originalMaterials.get(hoveredMesh);
+                if (original) {
+                    hoveredMesh.material = original.clone();
+                }
+            }
+            hoveredMesh = null;
+        }
+
+        // Handle mouse move for hover (THROTTLED for performance)
+        let lastHoverTime = 0;
+        const HOVER_THROTTLE_MS = 50;  // Only update hover every 50ms
+
         function onMouseMove(event) {
-            if (isMouseDown) return; // Skip hover when dragging
+            const now = Date.now();
+            if (isMouseDown || (now - lastHoverTime < HOVER_THROTTLE_MS)) return; // Skip if dragging or too soon
+            lastHoverTime = now;
 
             const rect = renderer.domElement.getBoundingClientRect();
             mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -914,7 +929,7 @@
 
             if (intersects.length > 0) {
                 const mesh = intersects[0].object;
-                const objectId = mesh.userData.objectId;
+                const objectId = mesh.userData.objectId; // Corrected from clickedMesh.userData.objectId
 
                 if (objectId && mesh !== hoveredMesh && mesh !== selectedMesh) {
                     // Clear previous hover
@@ -931,22 +946,15 @@
                     });
                     mesh.material = hoverMaterial;
                     renderer.domElement.style.cursor = 'pointer';
+                } else if (!objectId || mesh === selectedMesh) {
+                    // If no objectId or it's the selected mesh, clear hover
+                    clearHover();
+                    renderer.domElement.style.cursor = 'default';
                 }
             } else {
                 clearHover();
                 renderer.domElement.style.cursor = 'default';
             }
-        }
-
-        // Clear hover effect
-        function clearHover() {
-            if (hoveredMesh && hoveredMesh !== selectedMesh) {
-                const original = originalMaterials.get(hoveredMesh);
-                if (original) {
-                    hoveredMesh.material = original.clone();
-                }
-            }
-            hoveredMesh = null;
         }
 
         // 3D object click handler
@@ -963,36 +971,38 @@
                 const objectId = clickedMesh.userData.objectId;
 
                 if (objectId) {
-                    // Look up in surfaces first, then buildings
+                    // DEBUG: Log what we're looking for
+                    console.log('=== CLICK DEBUG ===');
+                    console.log('Clicked objectId:', objectId);
+                    console.log('Metadata exists:', !!metadata);
+                    if (metadata) {
+                        console.log('Metadata keys:', Object.keys(metadata));
+                        console.log('Has objects key:', !!metadata.objects);
+                        if (metadata.objects) {
+                            console.log('Total in metadata:', Object.keys(metadata.objects).length);
+                            console.log('Found in metadata:', !!metadata.objects[objectId]);
+                        }
+                    }
+
+                    // Look up in objects (new metadata structure)
                     let objData = null;
 
-                    if (metadata && metadata.surfaces && metadata.surfaces[objectId]) {
-                        // Surface-level object
+                    if (metadata && metadata.objects && metadata.objects[objectId]) {
+                        // Found in objects
+                        const obj = metadata.objects[objectId];
                         objData = {
                             id: objectId,
-                            ...metadata.surfaces[objectId],
-                            element_type: metadata.surfaces[objectId].type,
-                            polygon_count: metadata.surfaces[objectId].polygonCount,
-                            metadata: { name: metadata.surfaces[objectId].name }
-                        };
-                    } else if (metadata && metadata.buildings && metadata.buildings[objectId]) {
-                        // Building-level object  
-                        objData = {
-                            id: objectId,
-                            buildingId: objectId,
-                            name: objectId,
-                            type: 'Building',
-                            element_type: 'Building',
-                            polygon_count: 0, // Buildings don't have polygon_count directly in this context
-                            metadata: { name: objectId }
+                            element_type: obj.element_type || 'Unknown',
+                            polygon_count: obj.polygon_count || 0,
+                            metadata: obj.metadata || { name: objectId }
                         };
                     }
 
                     if (objData) {
                         selectObject(objectId, objData, clickedMesh);
-                        console.log('3D click detected:', objectId);
+                        console.log('✅ Click successful!');
                     } else {
-                        console.log('Clicked object not in metadata:', objectId);
+                        console.warn('❌ Clicked object not in metadata:', objectId);
                     }
                 } else {
                     console.log('Clicked mesh has no objectId in userData');
@@ -1072,7 +1082,7 @@
                 formData.append('file', file);
 
                 // Upload and convert
-                updateProgress(30, 'Converting to OBJ format...');
+                updateProgress(30, 'Optimizing 3D Data...');
 
                 const response = await fetch(`${BACKEND_URL}/upload`, {
                     method: 'POST',
@@ -1095,18 +1105,14 @@
                 // Store new session
                 currentSession = result.session_id;
 
-                // Load the converted model
-                const objPath = `${BACKEND_URL}${result.files.obj}`;
-                const mtlPath = `${BACKEND_URL}${result.files.mtl}`;
-                const metadataPath = `${BACKEND_URL}${result.files.metadata}`;
-
-                updateProgress(90, 'Almost done...');
+                updateProgress(90, 'Loading model...');
 
                 // Unload current model first
                 unloadModel();
 
-                // Load new model
-                loadModel(objPath, mtlPath, metadataPath);
+                // Load the converted GLB model
+                // Pass the result object directly - it contains files.glb and files.metadata
+                await loadModel(result);
 
                 updateProgress(100, 'Complete!');
                 showUploadStatus('success', `✅ Successfully loaded: ${file.name}`);
@@ -1164,18 +1170,10 @@
 
         // Unload current model
         function unloadModel() {
-            // Remove all objects from scene except lights, ground, and grid
-            const objectsToRemove = [];
-            scene.traverse((object) => {
-                if (object.isMesh || object.isGroup) {
-                    // Exclude ground and grid
-                    if (object !== ground && object !== gridHelper) {
-                        objectsToRemove.push(object);
-                    }
-                }
-            });
+            if (!modelGroup) return;
 
-            objectsToRemove.forEach(obj => {
+            // Dispose geometry and materials
+            modelGroup.traverse((obj) => {
                 if (obj.parent) {
                     obj.parent.remove(obj);
                 }
@@ -1192,7 +1190,7 @@
             // Clear state
             metadata = null;
             allObjects = [];
-            objectMeshes = {};
+            objectMeshMap = {};
             selectedMesh = null;
             hoveredMesh = null;
             modelGroup = null;
@@ -1200,10 +1198,10 @@
 
             // Clear UI
             document.getElementById('attribute-panel').classList.remove('visible');
-            document.getElementById('object-list').classList.remove('visible'); // Hide object list
-            document.getElementById('object-items').innerHTML = ''; // Clear list items
-            document.getElementById('list-count').textContent = '0'; // Reset list count
-            document.getElementById('search-box').value = ''; // Clear search box
+            document.getElementById('object-list').classList.remove('visible');
+            document.getElementById('object-items').innerHTML = '';
+            document.getElementById('list-count').textContent = '0';
+            document.getElementById('search-box').value = '';
             document.getElementById('info').style.display = 'none';
             document.getElementById('loading').style.display = 'block';
             document.getElementById('loading').innerHTML = '<div class="spinner"></div><div>No model loaded</div>';
@@ -1229,133 +1227,162 @@
             document.getElementById('loading').innerHTML = `<div class="spinner"></div><div>Loading ${modelName}...</div>`;
 
             // Load new model (reuse existing loading code)
-            loadModel(objPath, mtlPath, metadataPath);
-        }
-
-        // Extract model loading into reusable function
-        function loadModel(objPath, mtlPath, metadataPath) {
-            // Load metadata first
-            fetch(metadataPath)
-                .then(response => response.json())
-                .then(data => {
-                    metadata = data;
-                    console.log('Metadata loaded:', metadata.total_objects, 'surfaces');
-                    console.log('Buildings:', Object.keys(metadata.buildings || {}).length);
-
-                    // Populate object list
-                    if (metadata.surfaces) {
-                        allObjects = Object.entries(metadata.surfaces).map(([id, surface]) => ({
-                            id,
-                            ...surface
-                        }));
-                    } else if (metadata.objects) { // Fallback for older metadata structure
-                        allObjects = Object.entries(metadata.objects).map(([id, obj]) => ({
-                            id,
-                            ...obj
-                        }));
-                    }
-                    populateObjectList(allObjects);
-                })
-                .catch(err => {
-                    console.error('Error loading metadata:', err);
-                    document.getElementById('loading').innerHTML = '<div>Error loading metadata</div>';
-                });
-
-            // Load MTL then OBJ (existing code)
-            const mtlLoader = new MTLLoader();
-            mtlLoader.load(
-                mtlPath,
-                (materials) => {
-                    materials.preload();
-                    const objLoader = new OBJLoader();
-                    objLoader.setMaterials(materials);
-                    objLoader.load(
-                        objPath,
-                        (object) => {
-                            modelGroup = object;
-
-                            let vertexCount = 0;
-                            let triangleCount = 0;
-                            let objectCount = 0;
-
-                            object.traverse((child) => {
-                                if (child.isMesh) {
-                                    child.castShadow = true;
-                                    child.receiveShadow = true;
-
-                                    const objectId = child.name;
-                                    if (objectId) {
-                                        child.userData.objectId = objectId;
-
-                                        if (!objectMeshes[objectId]) {
-                                            objectMeshes[objectId] = [];
-                                        }
-                                        objectMeshes[objectId].push(child);
-
-                                        originalMaterials.set(child, child.material.clone());
-                                    }
-
-                                    const edges = new THREE.EdgesGeometry(child.geometry, 15);
-                                    const lineMaterial = new THREE.LineBasicMaterial({
-                                        color: 0x000000,
-                                        opacity: 0.2,
-                                        transparent: true
-                                    });
-                                    const edgeLines = new THREE.LineSegments(edges, lineMaterial);
-                                    child.add(edgeLines);
-
-                                    vertexCount += child.geometry.attributes.position.count;
-                                    triangleCount += child.geometry.index ?
-                                        child.geometry.index.count / 3 :
-                                        child.geometry.attributes.position.count / 3;
-                                    objectCount++;
-                                }
-                            });
-
-                            scene.add(object);
-
-                            document.getElementById('loading').style.display = 'none';
-                            document.getElementById('info').style.display = 'block';
-                            document.getElementById('object-count').textContent = objectCount;
-                            document.getElementById('vertex-count').textContent = vertexCount.toLocaleString();
-                            document.getElementById('triangle-count').textContent = Math.floor(triangleCount).toLocaleString();
-
-                            const box = new THREE.Box3().setFromObject(object);
-                            const center = box.getCenter(new THREE.Vector3());
-                            const size = box.getSize(new THREE.Vector3());
-                            const maxDim = Math.max(size.x, size.y, size.z);
-
-                            controls.target.copy(center);
-                            camera.position.set(
-                                center.x + maxDim,
-                                center.y - maxDim,
-                                center.z + maxDim * 0.7
-                            );
-                            controls.update();
-
-                            console.log('Model loaded successfully!');
-                            console.log('Object meshes stored:', Object.keys(objectMeshes).length);
-                        },
-                        (xhr) => {
-                            const percent = (xhr.loaded / xhr.total * 100).toFixed(0);
-                            document.querySelector('#loading div:last-child').textContent = `Loading model... ${percent}%`;
-                        },
-                        (error) => {
-                            console.error('Error loading OBJ:', error);
-                            document.getElementById('loading').innerHTML = '<div>Error loading model</div>';
-                        }
-                    );
-                },
-                undefined,
-                (error) => {
-                    console.error('Error loading MTL:', error);
-                    document.getElementById('loading').innerHTML = '<div>Error loading materials</div>';
+            loadModel({
+                files: {
+                    obj: objPath,
+                    mtl: mtlPath,
+                    metadata: metadataPath
                 }
-            );
+            });
         }
 
-        // Initialize with default model
-        loadModel('./citymodel.obj', './citymodel.mtl', './citymodel_metadata.json');
+        // Load model function
+        async function loadModel(response) {
+            try {
+                const modelPath = BACKEND_URL + response.files.glb;
+                const metadataPath = BACKEND_URL + response.files.metadata;
+
+                console.log(`Loading GLB from ${modelPath}`);
+                console.log(`Loading metadata from ${metadataPath}`);
+
+                document.getElementById('loading').innerHTML = '<div>Loading model...</div>';
+
+                // Load metadata first
+                const metadataResponse = await fetch(metadataPath);
+                metadata = await metadataResponse.json();
+                console.log('Metadata loaded:', metadata);
+
+                // Populate object list
+                allObjects = Object.keys(metadata.objects).map(id => ({
+                    id: id,
+                    ...metadata.objects[id]
+                }));
+                populateObjectList(allObjects);
+
+                // Load GLB model
+                const gltfLoader = new GLTFLoader();
+                gltfLoader.load(
+                    modelPath,
+                    (gltf) => {
+                        console.log('✅ GLB loaded successfully');
+                        const object = gltf.scene;
+                        modelGroup = object;
+
+                        let vertexCount = 0;
+                        let triangleCount = 0;
+                        let objectCount = 0;
+
+                        object.traverse((child) => {
+                            if (child.isMesh) {
+                                // Extract object ID from mesh/node name (Building ID)
+                                const objectId = child.name || child.parent?.name;
+                                child.userData.objectId = objectId;
+
+                                // Make objects pickable
+                                child.userData.pickable = true;
+
+                                // Track mesh by object ID for click interaction
+                                if (!objectMeshMap[objectId]) {
+                                    objectMeshMap[objectId] = [];
+                                }
+                                objectMeshMap[objectId].push(child);
+
+                                // PERFORMANCE BOOST: Optimize geometry
+                                if (child.geometry) {
+                                    child.geometry.computeVertexNormals();
+                                }
+
+                                // Color coding by type (from metadata)
+                                if (metadata && metadata.objects && metadata.objects[objectId]) {
+                                    const obj = metadata.objects[objectId];
+                                    const elementType = obj.element_type;
+
+                                    // Use MeshLambertMaterial for better performance
+                                    if (elementType === 'Building') {
+                                        child.material = new THREE.MeshLambertMaterial({
+                                            color: 0x4169E1,
+                                            side: THREE.DoubleSide,
+                                            flatShading: false
+                                        });
+                                    } else if (elementType === 'RoofSurface') {
+                                        child.material = new THREE.MeshLambertMaterial({
+                                            color: 0x8B4513,
+                                            side: THREE.DoubleSide,
+                                            flatShading: false
+                                        });
+                                    } else if (elementType === 'WallSurface') {
+                                        child.material = new THREE.MeshLambertMaterial({
+                                            color: 0xCCCCCC,
+                                            side: THREE.DoubleSide,
+                                            flatShading: false
+                                        });
+                                    } else if (elementType === 'GroundSurface') {
+                                        child.material = new THREE.MeshLambertMaterial({
+                                            color: 0x228B22,
+                                            side: THREE.DoubleSide,
+                                            flatShading: false
+                                        });
+                                    }
+                                }
+
+                                // PERFORMANCE: Enable frustum culling
+                                child.frustumCulled = true;
+
+                                // Store original material for hover/selection
+                                originalMaterials.set(child, child.material.clone());
+
+                                vertexCount += child.geometry.attributes.position.count;
+                                triangleCount += child.geometry.index ?
+                                    child.geometry.index.count / 3 :
+                                    child.geometry.attributes.position.count / 3;
+                                objectCount++;
+                            }
+                        });
+
+                        scene.add(object);
+
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('info').style.display = 'block';
+                        document.getElementById('object-count').textContent = objectCount;
+                        document.getElementById('vertex-count').textContent = vertexCount.toLocaleString();
+                        document.getElementById('triangle-count').textContent = Math.floor(triangleCount).toLocaleString();
+
+                        const box = new THREE.Box3().setFromObject(object);
+                        const center = box.getCenter(new THREE.Vector3());
+                        const size = box.getSize(new THREE.Vector3());
+                        const maxDim = Math.max(size.x, size.y, size.z);
+
+                        // Position camera to view the whole model
+                        const fov = camera.fov * (Math.PI / 180);
+                        let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+                        cameraZ *= 1.5;
+
+                        camera.position.set(center.x + cameraZ, center.y + cameraZ, center.z + cameraZ);
+                        camera.lookAt(center);
+                        controls.target.copy(center);
+                        controls.update();
+
+                        console.log(`Model centered at: (${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)})`);
+                        console.log(`Model loaded successfully!`);
+                        console.log(`Objects: ${objectCount}, Vertices: ${vertexCount}, Triangles: ${Math.floor(triangleCount)}`);
+                    },
+                    (progress) => {
+                        const percent = (progress.loaded / progress.total * 100).toFixed(0);
+                        document.getElementById('loading').innerHTML = `<div>Loading model... ${percent}%</div>`;
+                    },
+                    (error) => {
+                        console.error('Error loading GLB:', error);
+                        document.getElementById('loading').innerHTML = '<div>Error loading model</div>';
+                    }
+                );
+            } catch (err) {
+                console.error('Error loading model:', err);
+                document.getElementById('loading').innerHTML = '<div>Error loading model</div>';
+            }
+        }
+
+        // Don't load default model - wait for user to upload GML file
+        // loadModel('./citymodel.obj', './citymodel.mtl', './citymodel_metadata.json');
 
         // Handle window resize
         window.addEventListener('resize', () => {
