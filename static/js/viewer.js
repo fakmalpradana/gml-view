@@ -441,6 +441,15 @@
             document.getElementById('file-input').value = '';
         }
 
+        // Add event listeners for modal buttons
+        document.getElementById('close-upload').addEventListener('click', closeUploadModal);
+        document.getElementById('browse-files-btn').addEventListener('click', () => {
+            document.getElementById('file-input').click();
+        });
+        document.getElementById('fly-btn').addEventListener('click', () => {
+            window.flyToObject();
+        });
+
         // Drag and drop handlers
         const dropZone = document.getElementById('drop-zone');
 
@@ -805,6 +814,3 @@
             renderer.render(scene, camera);
         }
         animate();
-    </script>
-</body>
-

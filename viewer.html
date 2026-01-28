@@ -36,7 +36,7 @@
         </div>
         <div class="control-group">
             <button id="toggle-sidebar" class="control-btn">📋 Object List</button>
-            <button id="fly-btn" class="control-btn" onclick="flyToObject()">🎯 Fly To Object</button>
+            <button id="fly-btn" class="control-btn">🎯 Fly To Object</button>
         </div>
     </div>
 
@@ -45,7 +45,7 @@
         <div class="upload-content">
             <div class="upload-header">
                 <h2>Upload CityGML File</h2>
-                <button class="close-btn" onclick="closeUploadModal()">✕</button>
+                <button class="close-btn" id="close-upload">✕</button>
             </div>
             <div class="upload-body">
                 <div id="drop-zone" class="drop-zone">
@@ -53,8 +53,7 @@
                     <div class="drop-zone-text">Drag & drop your .gml or .xml file here</div>
                     <div class="drop-zone-or">or</div>
                     <input type="file" id="file-input" accept=".gml,.xml" style="display: none;">
-                    <button class="browse-btn" onclick="document.getElementById('file-input').click()">Browse
-                        Files</button>
+                    <button class="browse-btn" id="browse-files-btn">Browse Files</button>
                 </div>
                 <div id="upload-progress" class="upload-progress" style="display: none;">
                     <div class="progress-bar">
