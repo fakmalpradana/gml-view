@@ -1,8 +1,21 @@
-app/__pycache__
-data
-CityGML2OBJv2
-*.pyc 
-output/
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+*.egg-info/
+venv/
+env/
+
+# Data & Output  
+data/
 temp_models/
 uploads/
-*.DS_Store
+*.glb
+*.obj
+*.mtl
+*_metadata.json
+
+# OS
+.DS_Store
+.vscode/

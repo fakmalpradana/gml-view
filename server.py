@@ -32,7 +32,7 @@ active_models = {}
 def swagger_ui():
     """Serve Swagger UI page"""
     try:
-        ui_path = Path(__file__).parent / 'swagger_ui.html'
+        ui_path = Path(__file__).parent / 'docs' / 'swagger_ui.html'
         return send_file(ui_path, mimetype='text/html')
     except Exception as e:
         return jsonify({"error": str(e)}), 404
@@ -41,7 +41,7 @@ def swagger_ui():
 def api_docs():
     """Serve OpenAPI documentation"""
     try:
-        docs_path = Path(__file__).parent / 'openapi.yaml'
+        docs_path = Path(__file__).parent / 'docs' / 'openapi.yaml'
         return send_file(docs_path, mimetype='text/yaml')
     except Exception as e:
         return jsonify({"error": str(e)}), 404
@@ -188,6 +188,15 @@ def serve_model(session_id, filename):
         return send_from_directory(session_dir, filename)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/static/<path:filename>', methods=['GET'])
+def serve_static(filename):
+    """Serve static CSS/JS files"""
+    try:
+        static_dir = Path(__file__).parent / 'static'
+        return send_from_directory(static_dir, filename)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 404
 
 @app.route('/cleanup/<session_id>', methods=['DELETE'])
 def cleanup_session(session_id):
