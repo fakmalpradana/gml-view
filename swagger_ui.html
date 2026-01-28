@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CityGML Conversion API - Documentation</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui.css" />
+    <style>
+        html {
+            box-sizing: border-box;
+            overflow: -moz-scrollbars-vertical;
+            overflow-y: scroll;
+        }
+
+        *,
+        *:before,
+        *:after {
+            box-sizing: inherit;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .topbar {
+            background-color: #1e293b;
+            padding: 15px 0;
+        }
+
+        .topbar-wrapper {
+            max-width: 1460px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .topbar-wrapper .title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #ffffff;
+            margin: 0;
+        }
+
+        .topbar-wrapper .subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+            margin: 5px 0 0 0;
+        }
+
+        #swagger-ui {
+            max-width: 1460px;
+            margin: 0 auto;
+        }
+
+        .swagger-ui .info .title {
+            color: #1e293b;
+        }
+
+        /* Custom branding colors */
+        .swagger-ui .opblock.opblock-post {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .swagger-ui .opblock.opblock-post .opblock-summary-method {
+            background: #10b981;
+        }
+
+        .swagger-ui .opblock.opblock-get {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .swagger-ui .opblock.opblock-get .opblock-summary-method {
+            background: #3b82f6;
+        }
+
+        .swagger-ui .opblock.opblock-delete {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .swagger-ui .opblock.opblock-delete .opblock-summary-method {
+            background: #ef4444;
+        }
+
+        .swagger-ui .btn.execute {
+            background-color: #10b981;
+            border-color: #10b981;
+        }
+
+        .swagger-ui .btn.execute:hover {
+            background-color: #059669;
+            border-color: #059669;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div class="topbar-wrapper">
+            <h1 class="title">🌍 CityGML Conversion API</h1>
+            <p class="subtitle">Convert CityGML files to optimized GLB format with automatic metadata extraction</p>
+        </div>
+    </div>
+
+    <div id="swagger-ui"></div>
+
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-bundle.js" crossorigin></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-standalone-preset.js" crossorigin></script>
+    <script>
+        window.onload = function () {
+            window.ui = SwaggerUIBundle({
+                url: "/api-docs",
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout",
+                defaultModelsExpandDepth: 1,
+                defaultModelExpandDepth: 1,
+                docExpansion: "list",
+                filter: true,
+                showRequestHeaders: true,
+                supportedSubmitMethods: ['get', 'post', 'delete'],
+                tryItOutEnabled: true,
+                requestInterceptor: (request) => {
+                    // Auto-add localhost if testing from same origin
+                    if (request.url.startsWith('/')) {
+                        request.url = window.location.origin + request.url;
+                    }
+                    return request;
+                }
+            });
+        };
+    </script>
+</body>
+
+</html>

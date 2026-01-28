@@ -1,0 +1,355 @@
+openapi: 3.0.3
+info:
+  title: CityGML Conversion API
+  description: |
+    API for converting CityGML files to GLB/GLTF format with automatic metadata extraction.
+    
+    **Features**:
+    - Upload .gml or .xml CityGML files
+    - Automatic conversion to optimized GLB format
+    - Building metadata extraction (height, storeys, descriptions)
+    - Temporary file management with session-based cleanup
+    
+  version: 2.0.0
+  contact:
+    name: API Support
+    
+servers:
+  - url: http://localhost:5001
+    description: Development server
+
+tags:
+  - name: Conversion
+    description: CityGML file upload and conversion
+  - name: Files
+    description: Serve converted model files
+  - name: Cleanup
+    description: Session and file management
+  - name: Health
+    description: Health check endpoints
+
+paths:
+  /health:
+    get:
+      summary: Health Check
+      description: Check if the conversion server is running
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  message:
+                    type: string
+                    example: "Conversion server is running"
+
+  /upload:
+    post:
+      summary: Upload and Convert CityGML
+      description: |
+        Upload a CityGML file (.gml or .xml) for automatic conversion to GLB format.
+        
+        **Process**:
+        1. Upload CityGML file
+        2. Server converts to GLB using gml2glb.py
+        3. Extracts building metadata (height, storeys, etc.)
+        4. Returns session ID and file URLs
+        
+        **File Size**: Recommended max 50MB
+        **Timeout**: 5 minutes (300 seconds)
+      tags:
+        - Conversion
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CityGML file (.gml or .xml)
+              required:
+                - file
+      responses:
+        '200':
+          description: Conversion successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: string
+                    format: uuid
+                    example: "14a566b6-b39f-46e5-9e4a-c10c043b6004"
+                  filename:
+                    type: string
+                    example: "AT_30_A.gml"
+                  message:
+                    type: string
+                    example: "Conversion successful"
+                  files:
+                    type: object
+                    properties:
+                      glb:
+                        type: string
+                        example: "/models/14a566b6-b39f-46e5-9e4a-c10c043b6004/model.glb"
+                        description: Path to converted GLB file
+                      metadata:
+                        type: string
+                        example: "/models/14a566b6-b39f-46e5-9e4a-c10c043b6004/model_metadata.json"
+                        description: Path to metadata JSON
+        '400':
+          description: Bad request (invalid file type or missing file)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                no_file:
+                  value:
+                    error: "No file provided"
+                invalid_type:
+                  value:
+                    error: "Invalid file type. Only .gml and .xml files are allowed"
+        '500':
+          description: Conversion failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /models/{session_id}/{filename}:
+    get:
+      summary: Download Model File
+      description: |
+        Download converted GLB or metadata JSON file for a session.
+        
+        **Files available**:
+        - `model.glb` - Binary GLB model
+        - `model_metadata.json` - Building metadata
+      tags:
+        - Files
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Session ID from upload response
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [model.glb, model_metadata.json]
+          description: File to download
+      responses:
+        '200':
+          description: File found
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Metadata'
+        '404':
+          description: Session or file not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /cleanup/{session_id}:
+    delete:
+      summary: Delete Session Files
+      description: |
+        Delete uploaded GML file and temporary converted files for a session.
+        
+        **Deletes**:
+        - Original uploaded GML file
+        - Converted GLB file
+        - Metadata JSON file
+        - Session directory
+      tags:
+        - Cleanup
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Session ID to cleanup
+      responses:
+        '200':
+          description: Session cleaned up successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Session cleaned up successfully"
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Cleanup failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /sessions:
+    get:
+      summary: List Active Sessions
+      description: Get list of all active conversion sessions with metadata
+      tags:
+        - Cleanup
+      responses:
+        '200':
+          description: Active sessions list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/SessionInfo'
+                  count:
+                    type: integer
+                    example: 2
+
+  /cleanup-all:
+    delete:
+      summary: Delete All Sessions
+      description: |
+        Delete all temporary files and sessions.
+        
+        **Warning**: This will remove all uploaded and converted files.
+      tags:
+        - Cleanup
+      responses:
+        '200':
+          description: All sessions cleaned up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Cleaned up 5 sessions"
+                  count:
+                    type: integer
+                    example: 5
+        '500':
+          description: Cleanup failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+      required:
+        - error
+
+    SessionInfo:
+      type: object
+      properties:
+        filename:
+          type: string
+          example: "AT_30_A.gml"
+        created:
+          type: string
+          example: "20260127_105735"
+        gml_path:
+          type: string
+          example: "uploads/14a566b6-b39f-46e5-9e4a-c10c043b6004_AT_30_A.gml"
+        session_dir:
+          type: string
+          example: "temp_models/14a566b6-b39f-46e5-9e4a-c10c043b6004"
+
+    Metadata:
+      type: object
+      properties:
+        offset:
+          type: object
+          properties:
+            x:
+              type: number
+              format: double
+            y:
+              type: number
+              format: double
+            z:
+              type: number
+              format: double
+        total_objects:
+          type: integer
+          example: 460
+        objects:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/BuildingObject'
+
+    BuildingObject:
+      type: object
+      properties:
+        element_type:
+          type: string
+          example: "Building"
+        polygon_count:
+          type: integer
+          example: 35
+        metadata:
+          type: object
+          properties:
+            name:
+              type: string
+            description:
+              type: string
+            measuredHeight:
+              type: number
+              format: double
+              nullable: true
+            storeysAboveGround:
+              type: integer
+              nullable: true
+            storeysBelowGround:
+              type: integer
+              nullable: true
+            surfaceTypes:
+              type: object
+              additionalProperties:
+                type: integer
+              example:
+                RoofSurface: 2
+                WallSurface: 8
+                GroundSurface: 1

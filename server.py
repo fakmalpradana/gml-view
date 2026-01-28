@@ -4,7 +4,7 @@ CityGML Conversion Server
 Handles file uploads, automatic conversion to GLB, and temporary file management
 """
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 import os
 import sys
@@ -27,6 +27,24 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 # Store active conversions
 active_models = {}
+
+@app.route('/api', methods=['GET'])
+def swagger_ui():
+    """Serve Swagger UI page"""
+    try:
+        ui_path = Path(__file__).parent / 'swagger_ui.html'
+        return send_file(ui_path, mimetype='text/html')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 404
+
+@app.route('/api-docs', methods=['GET'])
+def api_docs():
+    """Serve OpenAPI documentation"""
+    try:
+        docs_path = Path(__file__).parent / 'openapi.yaml'
+        return send_file(docs_path, mimetype='text/yaml')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 404
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -247,13 +265,16 @@ if __name__ == '__main__':
     print(f"Temporary files: {TEMP_DIR.absolute()}")
     print(f"Upload directory: {UPLOAD_DIR.absolute()}")
     print("\nEndpoints:")
+    print("  GET  /api            - 📖 Swagger UI (Interactive API docs)")
+    print("  GET  /api-docs       - OpenAPI specification (YAML)")
     print("  GET  /health         - Health check")
     print("  POST /upload         - Upload and convert GML file")
     print("  GET  /models/<id>/<file> - Serve converted files")
     print("  DELETE /cleanup/<id> - Delete session files")
     print("  GET  /sessions       - List active sessions")
     print("  DELETE /cleanup-all  - Delete all temporary files")
-    print("\nStarting server on http://localhost:5001")
+    print("\n🚀 Interactive API Documentation: http://localhost:5001/api")
+    print("Starting server on http://localhost:5001")
     print("=" * 60)
     
     app.run(host='0.0.0.0', port=5001, debug=True)
