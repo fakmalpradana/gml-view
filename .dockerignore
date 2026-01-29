@@ -24,9 +24,8 @@ uploads/
 .git/
 .gitignore
 
-# Documentation
+# Documentation (keep docs/ for API documentation in container)
 README.md
-docs/
 
 # CI/CD
 .github/

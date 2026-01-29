@@ -427,7 +427,7 @@ renderer.domElement.addEventListener('click', onCanvasClick, false);
 
 // Current session management
 let currentSession = null;
-const BACKEND_URL = 'http://localhost:5001';
+const BACKEND_URL = 'https://citygml-viewer-6qyvfku6xq-et.a.run.app';
 
 // Upload Modal Functions
 function openUploadModal() {

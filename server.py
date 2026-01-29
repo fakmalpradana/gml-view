@@ -17,7 +17,18 @@ from pathlib import Path
 from datetime import datetime
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for local development
+# CORS configuration - allow localhost for development and production URL
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "http://localhost:8080",
+            "http://127.0.0.1:8080", 
+            "https://citygml-viewer-6qyvfku6xq-et.a.run.app"
+        ],
+        "methods": ["GET", "POST", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # Configuration
 TEMP_DIR = Path("temp_models")
