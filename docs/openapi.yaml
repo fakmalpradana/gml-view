@@ -23,6 +23,8 @@ tags:
     description: CityGML file upload and conversion
   - name: Files
     description: Serve converted model files
+  - name: Export
+    description: Export 3D models in various formats
   - name: Cleanup
     description: Session and file management
   - name: Health
@@ -212,6 +214,77 @@ paths:
                 $ref: '#/components/schemas/Error'
         '500':
           description: Cleanup failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /export/glb/{session_id}:
+    get:
+      summary: Export Model as GLB
+      description: |
+        Export the converted 3D model as GLB (Binary GLTF) format.
+        
+        **GLB Format**:
+        - Binary format (smaller file size)
+        - Contains geometry, materials, and textures
+        - Widely supported in 3D applications
+        - Recommended for web applications
+      tags:
+        - Export
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Session ID from upload response
+      responses:
+        '200':
+          description: GLB file download
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Session or model not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /export/obj/{session_id}:
+    get:
+      summary: Export Model as OBJ
+      description: |
+        Export the converted 3D model as OBJ (Wavefront) format.
+        
+        **OBJ Format**:
+        - Text-based format
+        - Contains geometry and materials (.mtl file)
+        - Widely compatible with 3D software
+        - Human-readable
+      tags:
+        - Export
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Session ID from upload response
+      responses:
+        '200':
+          description: OBJ file download (with .mtl material file)
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: Session or model not found
           content:
             application/json:
               schema:
