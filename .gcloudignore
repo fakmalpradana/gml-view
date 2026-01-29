@@ -1,0 +1,25 @@
+# Google Cloud
+.gcloudignore
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+venv/
+env/
+
+# Data
+data/
+temp_models/
+uploads/
+*.glb
+*.obj
+
+# Development
+.DS_Store
+.vscode/
+.gemini/
+
+# CI/CD
+.github/
