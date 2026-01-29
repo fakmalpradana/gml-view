@@ -11,7 +11,7 @@ echo "================================"
 # Configuration
 PROJECT_ID="citygml-view"
 SERVICE_NAME="citygml-viewer"
-REGION="us-central1"
+REGION="asia-southeast2"  # Jakarta, Indonesia (closest to Indonesia)
 SA_NAME="github-actions"
 
 # Step 1: Set active project
