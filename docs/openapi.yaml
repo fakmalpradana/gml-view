@@ -15,6 +15,8 @@ info:
     name: API Support
     
 servers:
+  - url: https://citygml-viewer-6qyvfku6xq-et.a.run.app
+    description: Production server (Cloud Run)
   - url: http://localhost:5001
     description: Development server
 
